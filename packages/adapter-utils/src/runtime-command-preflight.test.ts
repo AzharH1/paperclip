@@ -4,8 +4,8 @@ import {
   RUNTIME_COMMAND_PREFLIGHT_REFUSAL_MESSAGE,
 } from "./runtime-command-preflight.js";
 
-function blocked(command: string, args: string[] = []) {
-  return detectRuntimeCommandPreflightViolation({ command, args });
+function blocked(command: string, args: string[] = [], stdin?: string) {
+  return detectRuntimeCommandPreflightViolation({ command, args, stdin });
 }
 
 describe("runtime command preflight", () => {
@@ -63,6 +63,37 @@ describe("runtime command preflight", () => {
     expect(blocked("sh", ["-lc", "time env"])).toMatchObject({ code: "broad_runtime_env_inspection" });
     expect(blocked("sh", ["-lc", "echo '$(env)'"])).toBeNull();
     expect(blocked("sh", ["-lc", "time echo ok"])).toBeNull();
+  });
+
+  it("blocks broad environment dumps in stdin-provided shell bootstrap scripts", () => {
+    expect(blocked("sh", [], "printenv")).toMatchObject({ code: "broad_runtime_env_inspection" });
+    expect(blocked("bash", ["-s"], "set")).toMatchObject({ code: "broad_runtime_env_inspection" });
+    expect(blocked("bash", ["-s", "arg1"], "printenv\n")).toMatchObject({
+      code: "broad_runtime_env_inspection",
+    });
+    expect(blocked("sh", ["-s", "arg1"], "printenv\n")).toMatchObject({
+      code: "broad_runtime_env_inspection",
+    });
+    expect(blocked("zsh", ["-s", "--", "arg1"], "env | rg '^PAPERCLIP_'")).toMatchObject({
+      code: "broad_runtime_env_inspection",
+    });
+    expect(blocked("sh", [], "echo context recovered")).toBeNull();
+    expect(blocked("bash", ["./script.sh"], "printenv")).toBeNull();
+    expect(blocked("bash", ["--", "./script.sh"], "printenv")).toBeNull();
+    expect(blocked("bash", ["-lc", "cat"], "printenv")).toBeNull();
+  });
+
+  it("does not mistake shell option values for stdin-disabling script files", () => {
+    expect(blocked("bash", ["-O", "extglob"], "printenv")).toMatchObject({
+      code: "broad_runtime_env_inspection",
+    });
+    expect(blocked("bash", ["+O", "extglob"], "printenv")).toMatchObject({
+      code: "broad_runtime_env_inspection",
+    });
+    expect(blocked("zsh", ["-o", "shwordsplit"], "printenv")).toMatchObject({
+      code: "broad_runtime_env_inspection",
+    });
+    expect(blocked("bash", ["-O", "extglob", "./script.sh"], "printenv")).toBeNull();
   });
 
   it("blocks proc environ reads before command execution", () => {

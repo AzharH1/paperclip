@@ -393,7 +393,11 @@ export async function runAdapterExecutionTargetProcess(
   args: string[],
   options: AdapterExecutionTargetProcessOptions,
 ): Promise<RunProcessResult> {
-  const preflightViolation = detectRuntimeCommandPreflightViolation({ command, args });
+  const preflightViolation = detectRuntimeCommandPreflightViolation({
+    command,
+    args,
+    stdin: options.stdin,
+  });
   if (preflightViolation) {
     return await runtimeCommandPreflightRefusalResult(preflightViolation, options.onLog);
   }

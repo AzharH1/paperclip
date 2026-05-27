@@ -165,6 +165,7 @@ const DEFAULT_PLUGIN_SANDBOX_WORKER_READY_TIMEOUT_MS = 5_000;
 function runtimeCommandPreflightExecuteResult(input: {
   command: string;
   args?: string[];
+  stdin?: string;
 }): PluginEnvironmentExecuteResult | null {
   const violation = detectRuntimeCommandPreflightViolation(input);
   if (!violation) return null;

@@ -65,6 +65,51 @@ function extractShellScriptArg(args: string[]): string | null {
   return null;
 }
 
+function shellOptionConsumesNextValue(command: string, arg: string): boolean {
+  const base = commandBasename(command);
+  if (
+    base === "bash"
+    && (arg === "-O" || arg === "+O" || arg === "--init-file" || arg === "--rcfile")
+  ) {
+    return true;
+  }
+  if (
+    (base === "bash" || base === "dash" || base === "ksh" || base === "sh" || base === "zsh")
+    && (arg === "-o" || arg === "+o")
+  ) {
+    return true;
+  }
+  if (base === "fish" && (arg === "-C" || arg === "--init-command")) {
+    return true;
+  }
+  return false;
+}
+
+function shellReadsScriptFromStdin(command: string, args: string[]): boolean {
+  if (extractShellScriptArg(args) !== null) return false;
+
+  let explicitStdinScript = false;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] ?? "";
+    if (arg === "--") {
+      return explicitStdinScript || index === args.length - 1;
+    }
+    if (arg === "-s" || /^-[A-Za-z]*s[A-Za-z]*$/.test(arg)) {
+      explicitStdinScript = true;
+      continue;
+    }
+    if (shellOptionConsumesNextValue(command, arg)) {
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("-") || arg.startsWith("+")) continue;
+    if (explicitStdinScript) continue;
+    return false;
+  }
+
+  return true;
+}
+
 function splitShellSegments(script: string): string[] {
   const segments: string[] = [];
   let current = "";
@@ -416,6 +461,7 @@ function inspectShellScript(script: string): RuntimeCommandPreflightViolation | 
 export function detectRuntimeCommandPreflightViolation(input: {
   command: string;
   args?: string[];
+  stdin?: string | null;
 }): RuntimeCommandPreflightViolation | null {
   const args = input.args ?? [];
   const commandText = [input.command, ...args].join(" ");
@@ -426,6 +472,9 @@ export function detectRuntimeCommandPreflightViolation(input: {
   const shellScript = isShellCommand(input.command) ? extractShellScriptArg(args) : null;
   if (shellScript !== null) {
     return inspectShellScript(shellScript);
+  }
+  if (input.stdin && isShellCommand(input.command) && shellReadsScriptFromStdin(input.command, args)) {
+    return inspectShellScript(input.stdin);
   }
 
   return inspectCommandWords(input.command, args);

@@ -385,6 +385,36 @@ describe("runAdapterExecutionTargetProcess", () => {
     expect(JSON.stringify(onLog.mock.calls)).not.toContain("should-not-appear");
   });
 
+  it("refuses stdin-provided shell process commands before execution", async () => {
+    const onLog = vi.fn(async () => {});
+
+    const result = await runAdapterExecutionTargetProcess(
+      "run-refuse-stdin-process",
+      null,
+      "sh",
+      [],
+      {
+        cwd: "/tmp/local",
+        env: {
+          PAPERCLIP_SENTINEL_SECRET: "should-not-appear",
+        },
+        stdin: "printenv\n",
+        timeoutSec: 5,
+        graceSec: 1,
+        onLog,
+      },
+    );
+
+    expect(result).toMatchObject({
+      exitCode: 126,
+      timedOut: false,
+      stdout: "",
+    });
+    expect(result.stderr).toContain("Runtime command refused before execution");
+    expect(result.stderr).not.toContain("should-not-appear");
+    expect(JSON.stringify(onLog.mock.calls)).not.toContain("should-not-appear");
+  });
+
   it("refuses broad environment sandbox commands before provider execution", async () => {
     const runner = {
       execute: vi.fn(async () => ({

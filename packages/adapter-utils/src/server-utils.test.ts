@@ -235,6 +235,37 @@ describe("runChildProcess", () => {
     expect(JSON.stringify(logChunks)).not.toContain("should-not-appear");
   });
 
+  it("refuses stdin-provided context recovery scripts before they can print environment values", async () => {
+    const logChunks: Array<{ stream: "stdout" | "stderr"; chunk: string }> = [];
+
+    const result = await runChildProcess(
+      randomUUID(),
+      "sh",
+      [],
+      {
+        cwd: process.cwd(),
+        env: {
+          PAPERCLIP_CONTEXT_RECOVERY_SENTINEL: "context-sentinel-should-not-appear",
+        },
+        stdin: "printenv\n",
+        timeoutSec: 5,
+        graceSec: 1,
+        onLog: async (stream, chunk) => {
+          logChunks.push({ stream, chunk });
+        },
+      },
+    );
+
+    expect(result).toMatchObject({
+      exitCode: 126,
+      timedOut: false,
+      stdout: "",
+    });
+    expect(result.stderr).toContain("Runtime command refused before execution");
+    expect(JSON.stringify(result)).not.toContain("context-sentinel-should-not-appear");
+    expect(JSON.stringify(logChunks)).not.toContain("context-sentinel-should-not-appear");
+  });
+
   it("does not arm a timeout when timeoutSec is 0", async () => {
     const result = await runChildProcess(
       randomUUID(),

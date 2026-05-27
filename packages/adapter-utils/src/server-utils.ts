@@ -1892,7 +1892,11 @@ export async function runChildProcess(
   },
 ): Promise<RunProcessResult> {
   const onLogError = opts.onLogError ?? ((err, id, msg) => console.warn({ err, runId: id }, msg));
-  const preflightViolation = detectRuntimeCommandPreflightViolation({ command, args });
+  const preflightViolation = detectRuntimeCommandPreflightViolation({
+    command,
+    args,
+    stdin: opts.stdin,
+  });
   if (preflightViolation) {
     const stderr = `${preflightViolation.safeMessage}\n`;
     try {
